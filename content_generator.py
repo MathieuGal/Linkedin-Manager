@@ -1,40 +1,51 @@
 import logging
 
-from openai import OpenAI
+from google import genai
+from google.genai import types
 
-from config import OPENAI_API_KEY
+from pathlib import Path
+
+from config import GEMINI_API_KEY, GEMINI_MODEL
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "Tu es un expert en communication LinkedIn spécialisé dans la tech. "
-    "Rédige un post LinkedIn en français, professionnel mais engageant, "
-    "qui résume l'article fourni en 3-4 lignes, ajoute 3 hashtags pertinents "
-    "liés au développement, et termine par une question ouverte pour "
-    "encourager l'interaction. N'ajoute aucun titre ni préfixe au post."
-)
+PROMPT_FILE = Path(__file__).parent / "prompt.txt"
+
+
+def _load_prompt() -> str:
+    if not PROMPT_FILE.exists():
+        raise RuntimeError(f"Fichier prompt introuvable : {PROMPT_FILE}")
+    return PROMPT_FILE.read_text(encoding="utf-8").strip()
 
 
 def generate_post(title: str, summary: str) -> str:
     """Génère un post LinkedIn à partir du titre et du résumé d'un article."""
-    if not OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY manquant dans le fichier .env")
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY manquant dans le fichier .env")
 
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     user_prompt = f"Titre : {title}\nDescription : {summary}"
 
+    logger.info("Prompt envoyé à Gemini :\n%s", user_prompt[:1000])
+
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=300,
-            temperature=0.7,
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=_load_prompt(),
+                max_output_tokens=8192,
+                temperature=0.7,
+            ),
         )
-        return response.choices[0].message.content.strip()
+
+        candidate = response.candidates[0]
+        finish_reason = candidate.finish_reason
+        logger.info("Gemini finish_reason : %s", finish_reason)
+        logger.info("Gemini réponse brute :\n%s", response.text)
+
+        return response.text.strip()
 
     except Exception as exc:
         logger.error("Erreur lors de la génération du post : %s", exc)

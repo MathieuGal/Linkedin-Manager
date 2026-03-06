@@ -47,7 +47,7 @@ def _get_user_id() -> str:
     return user_id
 
 
-def publish_post(text: str, article_url: str) -> dict:
+def publish_post(text: str) -> dict:
     """
     Publie un post sur LinkedIn avec un lien vers l'article.
 
@@ -75,18 +75,10 @@ def publish_post(text: str, article_url: str) -> dict:
         },
         "specificContent": {
             "com.linkedin.ugc.ShareContent": {
-                # Le texte principal du post
                 "shareCommentary": {
                     "text": text
                 },
-                # ARTICLE = post avec un lien cliquable en preview
-                "shareMediaCategory": "ARTICLE",
-                "media": [
-                    {
-                        "status": "READY",
-                        "originalUrl": article_url,
-                    }
-                ],
+                "shareMediaCategory": "NONE",
             }
         },
     }

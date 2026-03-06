@@ -7,7 +7,7 @@ Bot qui publie automatiquement sur LinkedIn un résumé d'article tech généré
 ```
 main.py               → orchestrateur + scheduler
 news_fetcher.py        → récupère des articles via RSS, déduplique via Convex
-content_generator.py   → génère le post LinkedIn via OpenAI
+content_generator.py   → génère le post LinkedIn via Gemini
 linkedin_api.py        → publie sur LinkedIn via l'API REST v2
 config.py              → charge les variables d'environnement
 convex/schema.ts       → schéma de la table articles
@@ -16,20 +16,19 @@ convex/articles.ts     → fonctions query/mutation Convex
 
 ## Prérequis
 
-- Python 3.10+
-- Node.js 18+ (pour Convex CLI)
-- Un compte [OpenAI](https://platform.openai.com/) avec une clé API
+- Docker
+- Node.js 18+ (pour Convex CLI, setup uniquement)
+- Un compte [Google AI Studio](https://aistudio.google.com/) avec une clé API Gemini
 - Un compte [LinkedIn Developer](https://developer.linkedin.com/) avec une app configurée
 - Un compte [Convex](https://www.convex.dev/) (gratuit)
 
 ## Installation
 
-### 1. Cloner le projet et installer les dépendances Python
+### 1. Cloner le projet
 
 ```bash
-git clone <url-du-repo>
+git clone https://github.com/MathieuGal/Linkedin-Manager.git
 cd "Linkedin Manager"
-pip install -r requirements.txt
 ```
 
 ### 2. Configurer Convex
@@ -39,15 +38,14 @@ npm install convex
 npx convex dev
 ```
 
-Au premier lancement, Convex te demandera de te connecter et de créer un projet. Une fois déployé, note l'URL affichée dans le terminal (ex: `https://abc-123.convex.cloud`).
+Au premier lancement, Convex te demandera de te connecter et de créer un projet. Note l'URL affichée dans le terminal.
 
 ### 3. Obtenir les clés API
 
-#### OpenAI
+#### Gemini
 
-1. Aller sur https://platform.openai.com/api-keys
+1. Aller sur https://aistudio.google.com/apikeys
 2. Créer une nouvelle clé API
-3. Copier la clé
 
 #### LinkedIn
 
@@ -55,11 +53,11 @@ Au premier lancement, Convex te demandera de te connecter et de créer un projet
 2. Dans l'onglet **Auth**, noter le `Client ID` et `Client Secret`
 3. Ajouter les produits **Share on LinkedIn** et **Sign In with LinkedIn using OpenID Connect**
 4. Les scopes requis sont : `openid`, `profile`, `w_member_social`
-5. Générer un Access Token via l'OAuth 2.0 flow (ou les outils de test LinkedIn)
+5. Générer un Access Token via l'OAuth 2.0 flow
 
 ### 4. Remplir le fichier .env
 
-Ouvrir `.env` et remplacer les valeurs placeholder :
+Copier `.env` et remplacer les valeurs placeholder :
 
 ```env
 # LinkedIn API
@@ -67,38 +65,43 @@ LINKEDIN_CLIENT_ID=ton_client_id
 LINKEDIN_CLIENT_SECRET=ton_client_secret
 LINKEDIN_ACCESS_TOKEN=ton_access_token
 
-# OpenAI API
-OPENAI_API_KEY=sk-...
+# Gemini API
+GEMINI_API_KEY=AIza...
 
 # Convex
 CONVEX_URL=https://ton-deployment.convex.cloud
 ```
 
-### 5. Lancer le bot
+### 5. Lancer avec Docker
 
 ```bash
-python main.py
+docker compose up -d --build
 ```
 
-Le bot affiche la prochaine exécution planifiée et tourne en continu. Il publie automatiquement du lundi au vendredi à 11h00.
+Le bot tourne en arrière-plan et redémarre automatiquement en cas de crash ou de reboot.
 
-## Test rapide (publication immédiate)
-
-Pour tester chaque module individuellement :
+#### Commandes utiles
 
 ```bash
-# Tester la récupération d'articles
-python news_fetcher.py
+# Voir les logs en temps réel
+docker compose logs -f
 
-# Tester la génération de post
-python content_generator.py
+# Arrêter le bot
+docker compose down
 
-# Tester la publication LinkedIn
-python linkedin_api.py
+# Reconstruire après modification du code
+docker compose up -d --build
+```
+
+## Dev local (sans Docker)
+
+```bash
+pip install -r requirements.txt
+python main.py
 ```
 
 ## Notes
 
 - Le token LinkedIn expire au bout de 60 jours. Il faudra le renouveler manuellement ou implémenter le refresh token flow.
-- Le scheduler utilise l'heure locale de la machine. Vérifie que le fuseau horaire est correct.
-- Le fichier `.env` contient des secrets : ne jamais le commiter. Ajouter `.env` dans `.gitignore`.
+- Le fuseau horaire du container est configuré sur `Europe/Paris` dans `docker-compose.yml`.
+- Le fichier `.env` contient des secrets : ne jamais le commiter.

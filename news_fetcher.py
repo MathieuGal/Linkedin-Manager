@@ -2,6 +2,8 @@ import time
 import logging
 
 import feedparser
+import requests
+from bs4 import BeautifulSoup
 from convex import ConvexClient
 
 from config import CONVEX_URL
@@ -12,6 +14,34 @@ RSS_FEEDS = [
     "https://www.journalduhacker.net/rss",
     "https://dev.to/feed",
 ]
+
+
+def _scrape_article_content(url: str, max_chars: int = 3000) -> str:
+    """Récupère le texte principal d'un article via son URL."""
+    try:
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Supprimer les balises inutiles
+        for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+            tag.decompose()
+
+        # Chercher le contenu principal
+        for selector in ["article", "main", ".post-content", ".entry-content", ".content"]:
+            block = soup.select_one(selector)
+            if block:
+                text = block.get_text(separator=" ", strip=True)
+                if len(text) > 200:
+                    return text[:max_chars]
+
+        # Fallback : tout le body
+        text = soup.get_text(separator=" ", strip=True)
+        return text[:max_chars]
+
+    except Exception as exc:
+        logger.warning("Impossible de scraper %s : %s", url, exc)
+        return ""
 
 
 def _get_client() -> ConvexClient:
@@ -59,10 +89,17 @@ def fetch_latest_article() -> dict | None:
                     logger.debug("Déjà en base : %s", url)
                     continue
 
+                summary = entry.get("summary", "")
+                # Si le résumé RSS est vide ou trop court, scraper l'article
+                if len(summary) < 200:
+                    logger.info("Résumé RSS insuffisant (%d chars), scraping de l'article...", len(summary))
+                    summary = _scrape_article_content(url)
+                    logger.info("Contenu scrapé (%d chars) : %.500s", len(summary), summary)
+
                 article = {
                     "title": entry.get("title", "Sans titre"),
                     "url": url,
-                    "summary": entry.get("summary", ""),
+                    "summary": summary,
                 }
 
                 _save_article(client, article["title"], url, article["summary"])

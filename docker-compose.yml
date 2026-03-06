@@ -1,0 +1,9 @@
+services:
+  bot:
+    build: .
+    env_file: .env
+    restart: always
+    environment:
+      - TZ=Europe/Paris
+    volumes:
+      - ./posts:/app/posts
